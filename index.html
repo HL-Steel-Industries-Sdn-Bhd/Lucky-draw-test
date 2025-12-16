@@ -85,33 +85,28 @@ const result = document.getElementById("result");
 let spinning = false;
 let rotation = 0;
 
-// 奖品和权重
-const prizes = [
-  {name:"再来一次", weight:0.4, color:"#F7A1C4"},
-  {name:"三等奖", weight:0.3, color:"#CD7F32"},
-  {name:"二等奖", weight:0.2, color:"#C0C0C0"},
-  {name:"一等奖", weight:0.1, color:"#FFD700"}
+// 奖品区块，角度严格按照 40% / 30% / 20% / 10%
+const prizeAngles = [
+  {name:"再来一次", start:0, end:144, color:"#F7A1C4"},   // 40%
+  {name:"三等奖", start:144, end:252, color:"#CD7F32"},   // 30%
+  {name:"二等奖", start:252, end:324, color:"#C0C0C0"},   // 20%
+  {name:"一等奖", start:324, end:360, color:"#FFD700"}     // 10%
 ];
 
 // 动态生成 SVG 转盘
 function generateWheelSVG() {
   const center = 150;
-  let startAngle = 0;
   wheel.innerHTML = '';
-  prizes.forEach(p => {
-    const angle = p.weight * 360;
-    const endAngle = startAngle + angle;
-
-    // 弧度
-    const startRad = startAngle * Math.PI/180;
-    const endRad = endAngle * Math.PI/180;
+  prizeAngles.forEach(p => {
+    const startRad = p.start * Math.PI/180;
+    const endRad = p.end * Math.PI/180;
 
     const x1 = center + center * Math.cos(startRad);
     const y1 = center + center * Math.sin(startRad);
     const x2 = center + center * Math.cos(endRad);
     const y2 = center + center * Math.sin(endRad);
 
-    const largeArc = angle > 180 ? 1 : 0;
+    const largeArc = (p.end - p.start) > 180 ? 1 : 0;
 
     const path = document.createElementNS("http://www.w3.org/2000/svg","path");
     path.setAttribute("d",
@@ -120,11 +115,11 @@ function generateWheelSVG() {
     wheel.appendChild(path);
 
     // 文字
-    const text = document.createElementNS("http://www.w3.org/2000/svg","text");
-    const textAngle = startAngle + angle/2;
+    const textAngle = (p.start + p.end)/2;
     const rad = textAngle * Math.PI/180;
     const textX = center + (center/1.5) * Math.cos(rad);
     const textY = center + (center/1.5) * Math.sin(rad);
+    const text = document.createElementNS("http://www.w3.org/2000/svg","text");
     text.setAttribute("x", textX);
     text.setAttribute("y", textY);
     text.setAttribute("font-size","14");
@@ -133,33 +128,7 @@ function generateWheelSVG() {
     text.setAttribute("dominant-baseline","middle");
     text.textContent = p.name;
     wheel.appendChild(text);
-
-    startAngle += angle;
   });
-}
-
-// 权重抽奖
-function drawPrize() {
-  const r = Math.random();
-  let sum = 0;
-  for(let p of prizes){
-    sum += p.weight;
-    if(r < sum) return p.name;
-  }
-  return prizes[prizes.length-1].name;
-}
-
-// 根据奖品算角度
-function getTargetAngle(prizeName) {
-  let startAngle = 0;
-  for(let p of prizes){
-    const endAngle = startAngle + p.weight * 360;
-    if(p.name === prizeName){
-      return startAngle + Math.random()*(endAngle-startAngle);
-    }
-    startAngle = endAngle;
-  }
-  return 0;
 }
 
 // 初始化转盘
@@ -172,19 +141,23 @@ btn.onclick = () => {
   btn.className = "stop";
   result.textContent = "";
 
-  const prize = drawPrize();
-  const target = getTargetAngle(prize);
+  // 随机选角度
+  const randAngle = Math.random()*360;
+
+  // 判断指针落在哪个区块
+  let selectedPrize = prizeAngles.find(p=>randAngle>=p.start && randAngle<p.end).name;
 
   // 强制 reflow
   wheel.getBoundingClientRect();
 
-  const finalRotation = rotation + 360*6 + target;
+  // 动画旋转：6圈 + 随机角度
+  const finalRotation = rotation + 360*6 + randAngle;
   wheel.style.transform = `rotate(${finalRotation}deg)`;
   rotation = finalRotation;
 
   setTimeout(()=>{
-    result.textContent = "你获得：" + prize;
-    document.getElementById("prizeInput").value = prize;
+    result.textContent = "你获得：" + selectedPrize;
+    document.getElementById("prizeInput").value = selectedPrize;
     document.getElementById("logForm").submit();
 
     btn.textContent = "开始";
