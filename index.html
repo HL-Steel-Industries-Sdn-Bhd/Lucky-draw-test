@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Lucky Draw</title>
-
 <style>
 body {
   font-family: Arial;
@@ -11,41 +10,28 @@ body {
   background: #f5f5f5;
 }
 
-#wheel-container {
+#wheel-wrapper {
   position: relative;
-  width: 300px;
-  height: 300px;
+  width: 320px;
+  height: 320px;
   margin: 40px auto;
 }
 
 #wheel {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  border: 6px solid #333;
-  background: conic-gradient(
-    gold 0deg 90deg,
-    silver 90deg 180deg,
-    bronze 180deg 270deg,
-    pink 270deg 360deg
-  );
-  transition: transform 3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: transform 3s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 #pointer {
   position: absolute;
-  top: -20px;
+  top: -10px;
   left: 50%;
-  width: 0;
-  height: 0;
   transform: translateX(-50%);
-  border-left: 12px solid transparent;
-  border-right: 12px solid transparent;
-  border-bottom: 20px solid red;
 }
 
 button {
-  padding: 12px 30px;
+  padding: 12px 32px;
   font-size: 18px;
   border: none;
   border-radius: 6px;
@@ -63,7 +49,7 @@ button {
 #result {
   margin-top: 20px;
   font-size: 20px;
-  min-height: 30px;
+  min-height: 28px;
 }
 </style>
 </head>
@@ -72,19 +58,21 @@ button {
 
 <h2>Lucky Draw</h2>
 
-<div id="wheel-container">
-  <div id="pointer"></div>
-  <div id="wheel"></div>
+<div id="wheel-wrapper">
+  <!-- 倒三角指针 -->
+  <svg id="pointer" width="30" height="20" viewBox="0 0 30 20">
+    <polygon points="0,0 30,0 15,20" fill="red"/>
+  </svg>
+
+  <!-- SVG 转盘 -->
+  <svg id="wheel" viewBox="0 0 300 300"></svg>
 </div>
 
 <button id="btn" class="start">开始</button>
-
 <div id="result"></div>
 
 <!-- hidden form -->
-<form id="logForm" target="hiddenFrame"
-      method="POST"
-      action="https://script.google.com/macros/s/AKfycbyXVIuHrlCdRSw3g0LIb9ntEPkbvYYn6fFoPamsCfwZdZ00wVyWp96SHbI8afyLdir0/exec">
+<form id="logForm" target="hiddenFrame" method="POST" action="https://script.google.com/macros/s/AKfycbwuUlza6Blel03I1vvrjCl_0ZqAwZx6wOr-z5wn53e1TNn0GXcPftjB06abj9q6jgmX/exec">
   <input type="hidden" name="prize" id="prizeInput">
 </form>
 <iframe name="hiddenFrame" style="display:none;"></iframe>
@@ -95,53 +83,114 @@ const btn = document.getElementById("btn");
 const result = document.getElementById("result");
 
 let spinning = false;
-let currentRotation = 0;
-let selectedPrize = "";
+let rotation = 0;
 
-const prizeAngles = {
-  "一等奖": [0, 90],
-  "二等奖": [90, 180],
-  "三等奖": [180, 270],
-  "再来一次": [270, 360]
-};
+// 奖品和权重
+const prizes = [
+  {name:"再来一次", weight:0.4, color:"#F7A1C4"},
+  {name:"三等奖", weight:0.3, color:"#CD7F32"},
+  {name:"二等奖", weight:0.2, color:"#C0C0C0"},
+  {name:"一等奖", weight:0.1, color:"#FFD700"}
+];
 
+// 动态生成 SVG 转盘
+function generateWheelSVG() {
+  const center = 150;
+  let startAngle = 0;
+  wheel.innerHTML = '';
+  prizes.forEach(p => {
+    const angle = p.weight * 360;
+    const endAngle = startAngle + angle;
+
+    // 弧度
+    const startRad = startAngle * Math.PI/180;
+    const endRad = endAngle * Math.PI/180;
+
+    const x1 = center + center * Math.cos(startRad);
+    const y1 = center + center * Math.sin(startRad);
+    const x2 = center + center * Math.cos(endRad);
+    const y2 = center + center * Math.sin(endRad);
+
+    const largeArc = angle > 180 ? 1 : 0;
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("d",
+      `M${center},${center} L${x1},${y1} A${center},${center} 0 ${largeArc},1 ${x2},${y2} Z`);
+    path.setAttribute("fill", p.color);
+    wheel.appendChild(path);
+
+    // 文字
+    const text = document.createElementNS("http://www.w3.org/2000/svg","text");
+    const textAngle = startAngle + angle/2;
+    const rad = textAngle * Math.PI/180;
+    const textX = center + (center/1.5) * Math.cos(rad);
+    const textY = center + (center/1.5) * Math.sin(rad);
+    text.setAttribute("x", textX);
+    text.setAttribute("y", textY);
+    text.setAttribute("font-size","14");
+    text.setAttribute("fill","#000");
+    text.setAttribute("text-anchor","middle");
+    text.setAttribute("dominant-baseline","middle");
+    text.textContent = p.name;
+    wheel.appendChild(text);
+
+    startAngle += angle;
+  });
+}
+
+// 权重抽奖
 function drawPrize() {
   const r = Math.random();
-  if (r < 0.10) return "一等奖";
-  if (r < 0.30) return "二等奖";
-  if (r < 0.60) return "三等奖";
-  return "再来一次";
+  let sum = 0;
+  for(let p of prizes){
+    sum += p.weight;
+    if(r < sum) return p.name;
+  }
+  return prizes[prizes.length-1].name;
 }
 
-function getTargetAngle(prize) {
-  const [min, max] = prizeAngles[prize];
-  return Math.random() * (max - min) + min;
+// 根据奖品算角度
+function getTargetAngle(prizeName) {
+  let startAngle = 0;
+  for(let p of prizes){
+    const endAngle = startAngle + p.weight * 360;
+    if(p.name === prizeName){
+      return startAngle + Math.random()*(endAngle-startAngle);
+    }
+    startAngle = endAngle;
+  }
+  return 0;
 }
+
+// 初始化转盘
+generateWheelSVG();
 
 btn.onclick = () => {
-  if (!spinning) {
-    spinning = true;
-    result.textContent = "";
-    btn.textContent = "停止";
-    btn.className = "stop";
+  if(spinning) return;
+  spinning = true;
+  btn.textContent = "停止";
+  btn.className = "stop";
+  result.textContent = "";
 
-    selectedPrize = drawPrize();
-    const angle = getTargetAngle(selectedPrize);
-    const finalRotation = currentRotation + 360 * 5 + angle;
+  const prize = drawPrize();
+  const target = getTargetAngle(prize);
 
-    wheel.style.transform = `rotate(${finalRotation}deg)`;
-    currentRotation = finalRotation;
+  // 强制 reflow
+  wheel.getBoundingClientRect();
 
-    setTimeout(() => {
-      result.textContent = "你获得：" + selectedPrize;
-      document.getElementById("prizeInput").value = selectedPrize;
-      document.getElementById("logForm").submit();
+  const finalRotation = rotation + 360*6 + target;
+  wheel.style.transform = `rotate(${finalRotation}deg)`;
+  rotation = finalRotation;
 
-      btn.textContent = "开始";
-      btn.className = "start";
-      spinning = false;
-    }, 3000);
-  }
+  setTimeout(()=>{
+    result.textContent = "你获得：" + prize;
+    document.getElementById("prizeInput").value = prize;
+    document.getElementById("logForm").submit();
+
+    btn.textContent = "开始";
+    btn.className = "start";
+    spinning = false;
+  },3000);
 };
 </script>
 
