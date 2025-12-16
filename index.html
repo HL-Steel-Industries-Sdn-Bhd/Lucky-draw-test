@@ -20,7 +20,7 @@ body {
 #wheel {
   width: 100%;
   height: 100%;
-  transition: transform 3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: transform 0s linear;
 }
 
 #pointer {
@@ -28,6 +28,7 @@ body {
   top: -10px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 10;
 }
 
 button {
@@ -84,6 +85,7 @@ const result = document.getElementById("result");
 
 let spinning = false;
 let rotation = 0;
+let prizeToStop = null;
 
 // 奖品区块，角度严格按照 40% / 30% / 20% / 10%
 const prizeAngles = [
@@ -135,35 +137,58 @@ function generateWheelSVG() {
 generateWheelSVG();
 
 btn.onclick = () => {
-  if(spinning) return;
-  spinning = true;
-  btn.textContent = "停止";
-  btn.className = "stop";
-  result.textContent = "";
+  if(!spinning) {
+    // 开始旋转
+    spinning = true;
+    btn.textContent = "停止";
+    btn.className = "stop";
+    result.textContent = "";
 
-  // 随机选角度
-  const randAngle = Math.random()*360;
+    // 先随机决定本次抽奖结果
+    const r = Math.random();
+    let sum = 0;
+    for(let p of prizeAngles){
+      sum += (p.end - p.start)/360;
+      if(r < sum){
+        prizeToStop = p;
+        break;
+      }
+    }
 
-  // 判断指针落在哪个区块
-  let selectedPrize = prizeAngles.find(p=>randAngle>=p.start && randAngle<p.end).name;
+    // 转盘加速旋转
+    wheel.style.transition = "transform 0s linear";
+    wheel.style.transform = `rotate(${rotation}deg)`;
 
-  // 强制 reflow
-  wheel.getBoundingClientRect();
+    // 模拟加速效果
+    let speed = 20; // 每 frame 增加角度
+    const accelerate = () => {
+      rotation += speed;
+      wheel.style.transform = `rotate(${rotation}deg)`;
+      speed += 1;
+      if(spinning && speed < 50){
+        requestAnimationFrame(accelerate);
+      }
+    }
+    requestAnimationFrame(accelerate);
 
-  // 动画旋转：6圈 + 随机角度
-  const finalRotation = rotation + 360*6 + randAngle;
-  wheel.style.transform = `rotate(${finalRotation}deg)`;
-  rotation = finalRotation;
-
-  setTimeout(()=>{
-    result.textContent = "你获得：" + selectedPrize;
-    document.getElementById("prizeInput").value = selectedPrize;
-    document.getElementById("logForm").submit();
-
-    btn.textContent = "开始";
-    btn.className = "start";
+  } else {
+    // 用户点击停止 → 开始缓慢减速到指定奖品区块
     spinning = false;
-  },3000);
+    const targetAngle = prizeToStop.start + Math.random()*(prizeToStop.end-prizeToStop.start);
+    const finalRotation = rotation + 360*3 + (targetAngle - (rotation % 360));
+    wheel.style.transition = "transform 3s cubic-bezier(0.25, 0.1, 0.25, 1)";
+    wheel.style.transform = `rotate(${finalRotation}deg)`;
+    rotation = finalRotation;
+
+    setTimeout(()=>{
+      result.textContent = "你获得：" + prizeToStop.name;
+      document.getElementById("prizeInput").value = prizeToStop.name;
+      document.getElementById("logForm").submit();
+
+      btn.textContent = "开始";
+      btn.className = "start";
+    },3000);
+  }
 };
 </script>
 
