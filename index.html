@@ -20,7 +20,7 @@ body {
 #wheel {
   width: 100%;
   height: 100%;
-  transition: transform 0s linear;
+  transform: rotate(0deg);
 }
 
 #pointer {
@@ -60,19 +60,15 @@ button {
 <h2>Lucky Draw</h2>
 
 <div id="wheel-wrapper">
-  <!-- 倒三角指针 -->
   <svg id="pointer" width="30" height="20" viewBox="0 0 30 20">
     <polygon points="0,0 30,0 15,20" fill="red"/>
   </svg>
-
-  <!-- SVG 转盘 -->
   <svg id="wheel" viewBox="0 0 300 300"></svg>
 </div>
 
 <button id="btn" class="start">开始</button>
 <div id="result"></div>
 
-<!-- hidden form -->
 <form id="logForm" target="hiddenFrame" method="POST" action="https://script.google.com/macros/s/AKfycbwuUlza6Blel03I1vvrjCl_0ZqAwZx6wOr-z5wn53e1TNn0GXcPftjB06abj9q6jgmX/exec">
   <input type="hidden" name="prize" id="prizeInput">
 </form>
@@ -84,46 +80,43 @@ const btn = document.getElementById("btn");
 const result = document.getElementById("result");
 
 let spinning = false;
-let rotation = 0;
 let prizeToStop = null;
+let rotation = 0;
+let animFrameId = null;
 
-// 奖品区块，角度严格按照 40% / 30% / 20% / 10%
+// 奖品区块
 const prizeAngles = [
-  {name:"再来一次", start:0, end:144, color:"#F7A1C4"},   // 40%
-  {name:"三等奖", start:144, end:252, color:"#CD7F32"},   // 30%
-  {name:"二等奖", start:252, end:324, color:"#C0C0C0"},   // 20%
-  {name:"一等奖", start:324, end:360, color:"#FFD700"}     // 10%
+  {name:"再来一次", start:0, end:144, color:"#F7A1C4"},
+  {name:"三等奖", start:144, end:252, color:"#CD7F32"},
+  {name:"二等奖", start:252, end:324, color:"#C0C0C0"},
+  {name:"一等奖", start:324, end:360, color:"#FFD700"}
 ];
 
-// 动态生成 SVG 转盘
+// 动态生成 SVG
 function generateWheelSVG() {
   const center = 150;
   wheel.innerHTML = '';
   prizeAngles.forEach(p => {
-    const startRad = p.start * Math.PI/180;
-    const endRad = p.end * Math.PI/180;
-
-    const x1 = center + center * Math.cos(startRad);
-    const y1 = center + center * Math.sin(startRad);
-    const x2 = center + center * Math.cos(endRad);
-    const y2 = center + center * Math.sin(endRad);
-
+    const startRad = p.start*Math.PI/180;
+    const endRad = p.end*Math.PI/180;
+    const x1 = center + center*Math.cos(startRad);
+    const y1 = center + center*Math.sin(startRad);
+    const x2 = center + center*Math.cos(endRad);
+    const y2 = center + center*Math.sin(endRad);
     const largeArc = (p.end - p.start) > 180 ? 1 : 0;
 
     const path = document.createElementNS("http://www.w3.org/2000/svg","path");
-    path.setAttribute("d",
-      `M${center},${center} L${x1},${y1} A${center},${center} 0 ${largeArc},1 ${x2},${y2} Z`);
-    path.setAttribute("fill", p.color);
+    path.setAttribute("d",`M${center},${center} L${x1},${y1} A${center},${center} 0 ${largeArc},1 ${x2},${y2} Z`);
+    path.setAttribute("fill",p.color);
     wheel.appendChild(path);
 
-    // 文字
-    const textAngle = (p.start + p.end)/2;
-    const rad = textAngle * Math.PI/180;
-    const textX = center + (center/1.5) * Math.cos(rad);
-    const textY = center + (center/1.5) * Math.sin(rad);
+    const textAngle = (p.start+p.end)/2;
+    const rad = textAngle*Math.PI/180;
+    const textX = center + (center/1.5)*Math.cos(rad);
+    const textY = center + (center/1.5)*Math.sin(rad);
     const text = document.createElementNS("http://www.w3.org/2000/svg","text");
-    text.setAttribute("x", textX);
-    text.setAttribute("y", textY);
+    text.setAttribute("x",textX);
+    text.setAttribute("y",textY);
     text.setAttribute("font-size","14");
     text.setAttribute("fill","#000");
     text.setAttribute("text-anchor","middle");
@@ -133,18 +126,20 @@ function generateWheelSVG() {
   });
 }
 
-// 初始化转盘
 generateWheelSVG();
 
+let currentSpeed = 0;
+let decelerating = false;
+
 btn.onclick = () => {
-  if(!spinning) {
-    // 开始旋转
+  if(!spinning){
+    // 开始
     spinning = true;
     btn.textContent = "停止";
     btn.className = "stop";
     result.textContent = "";
 
-    // 先随机决定本次抽奖结果
+    // 决定本次奖品
     const r = Math.random();
     let sum = 0;
     for(let p of prizeAngles){
@@ -155,39 +150,42 @@ btn.onclick = () => {
       }
     }
 
-    // 转盘加速旋转
-    wheel.style.transition = "transform 0s linear";
-    wheel.style.transform = `rotate(${rotation}deg)`;
+    // 初始加速
+    currentSpeed = 10;
+    decelerating = false;
 
-    // 模拟加速效果
-    let speed = 20; // 每 frame 增加角度
-    const accelerate = () => {
-      rotation += speed;
+    const spin = () => {
+      rotation += currentSpeed;
       wheel.style.transform = `rotate(${rotation}deg)`;
-      speed += 1;
-      if(spinning && speed < 50){
-        requestAnimationFrame(accelerate);
+      if(!decelerating){
+        currentSpeed += 0.5; // 加速
+        if(currentSpeed>40) currentSpeed = 40; // 最大速度
+      } else {
+        currentSpeed *= 0.97; // 减速
+        if(currentSpeed<0.5){
+          cancelAnimationFrame(animFrameId);
+          rotation += 0; // 停稳
+          result.textContent = "你获得：" + prizeToStop.name;
+          document.getElementById("prizeInput").value = prizeToStop.name;
+          document.getElementById("logForm").submit();
+          btn.textContent = "开始";
+          btn.className = "start";
+          spinning = false;
+        }
       }
-    }
-    requestAnimationFrame(accelerate);
+      animFrameId = requestAnimationFrame(spin);
+    };
+    animFrameId = requestAnimationFrame(spin);
 
-  } else {
-    // 用户点击停止 → 开始缓慢减速到指定奖品区块
-    spinning = false;
-    const targetAngle = prizeToStop.start + Math.random()*(prizeToStop.end-prizeToStop.start);
-    const finalRotation = rotation + 360*3 + (targetAngle - (rotation % 360));
-    wheel.style.transition = "transform 3s cubic-bezier(0.25, 0.1, 0.25, 1)";
-    wheel.style.transform = `rotate(${finalRotation}deg)`;
-    rotation = finalRotation;
+  } else if(spinning && !decelerating){
+    // 用户点击停止 → 开始减速
+    decelerating = true;
 
-    setTimeout(()=>{
-      result.textContent = "你获得：" + prizeToStop.name;
-      document.getElementById("prizeInput").value = prizeToStop.name;
-      document.getElementById("logForm").submit();
-
-      btn.textContent = "开始";
-      btn.className = "start";
-    },3000);
+    // 计算最终目标角度在奖品区块内随机
+    const randAngle = prizeToStop.start + Math.random()*(prizeToStop.end - prizeToStop.start);
+    const currentRotationMod = rotation % 360;
+    const extraRotation = (randAngle - currentRotationMod + 360) % 360 + 360*3; // 再转3圈
+    rotation += extraRotation;
   }
 };
 </script>
